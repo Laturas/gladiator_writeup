@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="description" content="Gladiator Writeup">
+    <title>Gladiator Writeup</title>
+    <meta name="author" content="John Doe">
+    <link rel="stylesheet" href="main.css"> 
+</head>
+<body>
+    <div class="body_text">
+        <h1>
+            Gladiator Overview
+        </h1>
+        <h2>
+            Introduction
+        </h2>
+        <p>
+            This is a general overview of the Gladiator programming language, including syntax, features and more.
+            <br>
+            This article assumes a working knowledge of lower-level programming concepts.
+            <br><br>
+            Before getting into the language itself, it's helpful to understand the guiding philosophy and principles of the language. Gladiator is a language built with the following propositions in mind:<br> <br>
+            - The language should make the safest and most efficient way to implement something the easiest. <br><br>
+            - A language should be simple to understand, and quick to pick up and be productive in. <br><br>
+            - Programs are built to solve problems. You need to understand the problem before creating the solution. <br><br>
+            - Programmers should be able to understand what their code does<br><br>
+            - A programming language should be well-defined
+        </p>
+        <h2>Getting started</h2>
+        <p>
+            One of Gladiator's guiding principles is simplicity - and this extends to the building process. To get started, install the compiler
+            and run it in the top directory of your project.
+            <br>
+        </p>
+            <p class="code_block">
+                &gt gladiator build &ltexecutable_name&gt
+            </p>
+            <p>
+                Gladiator's compiler will recursively find and compile all files ending in .glad and produce an output assembly file. Unfortunately,
+                you'll have to use a different tool to take the assembly all the way down to an executable, but any C compiler should be capable of doing so.
+                <br><br>
+                (Listen, exe formats are scary ok &gt&lt)
+            </p>
+        <h2>
+            Basic syntax
+        </h2>
+        <p>
+            All declarations in gladiator follow a basic format of name : type, and value. This is true for functions and variables
+        </p>
+<pre class="code_block">main(param_1 : i32) : i32 {
+    local_var : i32 = param_1 + 2;
+    return local_var;
+}</pre>
+        <p>
+            This is also true for structs
+        </p>
+<pre class="code_block">example_struct {
+    element_1 : i32,
+    element_2 : bool,
+}
+</pre>
+        <p>
+            Types can be inferred for local variables.
+        </p>
+<pre class="code_block">// This is fine, too
+main(param_1 : i32) : i32 {
+    local_var := param_1 + 2;
+
+    return local_var;
+}</pre>
+        <p>
+            Single line comments are supported which can be started with //
+        </p>
+<pre class="code_block">// This comment does not affect the output
+main(param_1 : i32) : i32 {
+    local_var : i32 = param_1 + 2; // Neither does this one
+    return local_var;
+}</pre>
+        <p>
+            All statements must be terminated with a semicolon, with the exception of ones closed by curly braces like if statements and loops.
+            <br>
+            <br>
+            Having a clear statement end makes it much easier for the compiler to parse, and we believe makes code safer by having a signal to readers where a statement ends.
+            <br>
+            In addition, it does this while opening up a bit more freedom in how people can write their code, improving enjoyability to write.
+        </p>
+<pre class="code_block">main(param_1 : bool) : i32 {
+    if param_1 {
+        return 5; // Fine
+    } // Fine
+    else {
+        return 3 // Not fine - syntax error
+    }
+}</pre>
+        <p>
+            Whitespace is almost completely insignificant in Gladiator, deleting all whitespace from a program should allow it to still compile (with the exception of single line comments)
+            <br>
+            Though you may need to add some parentheses to separate some tokens.
+        </p>
+<pre class="code_block">// This would be fine with the compiler
+// but probably not your coworkers
+main(param_1:i32):i32{local_var:i32=param_1+2;return(local_var);}</pre>
+
+        <h2>
+            Memory management - The thing you actually came for
+        </h2>
+        <p>
+            Gladiator's central design is oriented around the usage of arena based memory allocation. <br><br>
+
+            Manual memory management offers power to programmers like few other features. Fine-grained control is necessary for many fields of software development. The catch is that it's hard, and brings with it numerous security bugs. But we don't believe it has to be that way!
+            A significant reason manual memory management is difficult in a lot of lanugages is due to the need to keep track of many atomized lifetimes. 
+            Tools like RAII, the borrow checker, GC, etc. have been created to try and keep track of the hundreds of tiny allocations and frees while preventing bugs. They all however can encourage bad practices and can incur overhead.<br><br>
+            
+            Fortunately, programmers figured out a while ago that there's a better way to do memory management. <br>
+            An arena is best thought of as a group of items in memory that have the same lifetime. All items in an arena are stored contiguously, one after another, and allocating more memory to an arena is as simple as pushing an item to the end of it.
+        </p>
+            <pre class="code_block">PlayerInformation : struct {health : f32, gold : u32}
+
+memory_allocation_example() {
+    player_data_arena : arena = arena_allocate(4096);
+    player_data : ->PlayerInformation = player_data_arena.push(PlayerInformation);
+
+    player_data.health = 100;
+    player_data.gold = 1;
+}</pre>
+        <p>
+            Arenas comes with a few rules introduced by the language to ensure safety. <br>
+            - arenas are ALWAYS destroyed at the same scope they were created in. This is to prevent memory leaks. <br>
+            - Following from that, no reference to an object inside of an arena can exist longer than the arena. Returning a reference to data created in a local arena is a compile-time error. <br>
+            - Arenas cannot be referenced or pointed to outside of the initial reference created for it. This means structs cannot contain arenas.
+        </p>
+        <p>
+            the arena_allocate function only reserves the given address space for the arena but does not commit it.<br>
+            This means the arena won't actually use any physical memory in that space until it is pushed to.<br><br>
+            Alternatively, use the arena_commit function to commit memory. This is the recommended way to use memory if you know roughly how much memory you will actually need since it reduces allocation overhead.
+        </p>
+
+        <h2>
+            Error handling and multiple returns
+        </h2>
+        <p>
+            Gladiator does not have any specialized error handling system like exceptions or built-in error types. Instead, Gladiator expands on how error handling is usually done in C but with some extra ease of use.<br><br>
+
+            Functions in gladiator have multiple return values. This allows the programmer to return error codes alongside the intended return of a function.
+        </p>
+
+<pre class="code_block">http_error : enum {
+    SUCCESS = 200, 
+    BAD_REQUEST = 400, 
+    FORBIDDEN = 403, 
+    NOT_FOUND = 404
+}
+
+get_images_from_server(url : string) : array<images>, http_error! {
+    image_array, error_code := request(url);
+
+    if error_code != http_error.SUCCESS {
+        println("Error in processing request: Returned error code %", 
+            error_code
+        );
+        return image_array, http_error;
+    }
+}
+</pre>
+        <p>
+            Not assigning a return value from a function is a compile time warning.
+            However you can add the ! operator to the end of a function return type to make it a compile time error. This forces programmers to handle the error (or at least explicitly ignore it).
+        </p>
+        <h2>
+            Style and standards
+        </h2>
+        <p>
+            Enum and struct names are written in PascalCase. Everything else like variable names, function names, file names, etc are written in snake_case. Enum values and constants are written in SCREAMING_SNAKE_CASE
+        </p>
+<pre class="code_block">// Example naming conventions
+ExampleEnum : enum {
+    VALUE_0 = 0,
+    VALUE_1 = 1,
+    VALUE_2 = 2,
+}
+
+ExampleStruct : struct {
+    value_type : ExampleEnum,
+    int_value : i32,
+}
+
+example_function() {
+    local_struct : ExampleStruct = {VALUE_0, 5};
+}
+</pre>
+        <p>
+            snake_case we believe is the most readable syntax form, but having a separate syntax to denote types vs data and functions also makes it a bit cleaner to follow.
+        </p>
+        <p>
+            Curly braces should start on the same line as the statement that starts them.
+        </p>
+        <p>
+            Documentation of functions should be done in the javadoc style
+        </p>
+<pre class="code_block">/**
+* This is a function being used as an example for how to document code
+* according to the standards of the language.
+* @param example_param Parameters are documented with this tag
+* @return Returns are documented with this tag.
+*/
+example_function(example_param : i32) : i32 {
+    // Do stuff
+    return something;
+}
+
+/**
+* While documentation is helpful, remember not to over-document!
+* This function probably doesn't need it.
+*/
+multiply_two_numbers(number_one : i32, number_two : i32) {
+    return number_one * number_two;
+}
+</pre>
+        <h2>
+            Classification
+        </h2>
+        <p>
+            Gladiator does not have classes in the C++ sense. A class means something different in this language, it instead refers to a design pattern to categorize types of structs.<br><br>
+            Structs inherit from classes, which is a way of governing how their data is interpreted. This is best explained through an example.
+        </p>
+<pre class="code_block">// Parent of the string class
+string : struct {
+    start : @char,
+    end : @char,
+}
+
+ascii_string : string {
+    start : @char,
+    end : @char,
+}
+
+utf8_string : string {
+    start : @char,
+    end : @char,
+}
+
+/**
+* This function can take in a struct that falls under the string class
+* and have multiple implementations for multiple kinds of strings.
+*/
+void parse_string(input_str : string) {
+    switch input_str.type {
+        case ascii_string: parse_ascii_string(input_str);
+
+        case utf8_string: parse_utf8_string(input_str);
+    }
+}
+</pre>
+        <p>
+            Inheriting from a struct class has some restrictions: <br>
+            - You must implement the fields of the parent. <br>
+            - You can only inherit from a single class at once. You can have an inheritance chain, however. This is to prevent the diamond inheritance problem. <br>
+            - All structs in a class will be the same size, meaning the size of the largest struct in the class. So be careful not to waste a bunch of space! <br>
+        </p>
+<pre class="code_block">/** 
+* This parent struct is 4 bytes, but it looks to only have 3 accounted for.
+* This is because of the rgba_pixel struct inheriting from it.
+*/
+pixel : struct {
+    red : u8,
+    green : u8,
+    blue: u8,
+}
+
+rgba_pixel : pixel {
+    red : u8,
+    green : u8,
+    blue: u8,
+    alpha: u8,
+}</pre>
+        <h2>
+            No macros!? But how do I do X without macros!?
+        </h2>
+        <p>
+            That's right, gladiator has no macros. Especially C-style macros have a lot of problems that we wish to avoid, mainly:<br>
+            - It introduces an entirely separate turing-complete language and syntax to learn. This overcomplicates the language.<br>
+            - It can create namespace conflicts<br>
+            - It makes code harder to understand especially if done poorly <br>
+            - Macro expansion can have some weird side effects<br><br>
+
+            Other languages like Rust have implemented their own different macro styles, but still suffer from added complexity.
+            We think it's best to just not implement them because their main uses can be done in other ways.<br><br>
+
+            <b>Conditional Compilation</b> <br><br>
+            Enums are evaluated at compile time, and we've built dead-code elimination as not just an optimization but an actual feature of the language. Here is an example:
+        </p>
+            <pre class="code_block">
+platform : enum {
+    WINDOWS = 0,
+    MACOS = 1,
+    LINUX = 2,
+}
+const build_target : platform = WINDOWS;
+
+[entry]
+main() {
+    if (build_target == WINDOWS) {
+        // Windows OS dependent code...
+    }
+    if (build_target == MACOS) {
+        // Mac OS dependent code...
+    }
+    if (build_target == LINUX) {
+        // Linux OS dependent code...
+    }
+}
+</pre>
+        <p>
+            Because enums are just replaced with their value at compile time and dead code elimination is a feature of the language, not compiler-dependent,
+            the above code just gets converted to the following at compile time:
+        </p>
+<pre class="code_block">
+[entry]
+main() {
+    // Windows OS dependent code...
+}
+</pre>
+        <p>
+            Because dead code is not evaluated for correctness at compile time either, you can have all the different platform specific system calls you want in the same code base
+            as long as it gets determined to never run. <br><br>
+
+            <b>Magic numbers</b> <br><br>
+            Enums come to the rescue again. Enums can be assigned any numeric type and will get replaced at compile time.
+        </p>
+<pre class="code_block">
+constants : enum {
+    PI = 3.1415926,
+    E = 2.7182818,
+    PHI = 1.618,
+}
+
+calculate_circle_area(radius : f32) {
+    return PI * radius * radius;
+}
+</pre>
+        <p>
+            <b>Inlining</b> <br><br>
+            Function inlining sucks in C because the compiler can just kinda ignore your requests to inline a function. This is why macros are popular for guaranteed inlining of functions. <br> <br>
+            Fortunately, in gladiator, the [inline] attribute will guarantee a function gets inlined no matter what.
+            <br><br>
+            <b>Generics</b> <br><br>
+            Generics violate the philosophy of the language. Making them harder to add is a feature and not a bug.
+            <br><br>
+            So with all of the above, that replaces several of the most major use cases for macros. To reduce language complexity and redundancy we have thus elected not to add them.
+            <br><br>
+        </p>
+        <h2>
+            Pointers and references
+        </h2>
+        <p>
+            Raw pointers are the source of many bugs and programmer frustrations, but they are also necessary. Therefore support for pointers exists in the language however their use is discouraged in favor of alternatives.
+            <br>
+            Pointers in gladiator are pointy! Their syntax looks like this:
+        </p>
+<pre class="code_block">
+pointer_example(item : i32, item_2 : i32, pointed_to : ->i32) : bool {
+    // => assigns a pointer to point to something.
+    pointer :=> item;
+    pointer => item_2;
+    
+    // -> goes on the right to dereference, and on the left to reference
+    dereferenced_value := pointed_to->;
+
+    // Add more >'s to the arrow head to make a larger pointer chain.
+    // equivalent to int*** triple_pointer = &&&item; in C
+    triple_pointer :=> ->>item; 
+
+    return (->item) > (->item_2);
+}
+</pre>
+        <p>
+            You can do all of the standard pointer stuff like pointer arithmetic, direct assignment, casting, etc. <br>
+            References are a safer alternative to pointers. They cannot be null, and cannot have arithmetic done on them. They are denoted with the @ symbol.<br>
+<pre class="code_block">
+pointer_example(item : i32, item_2 : i32, referenced : @i32) : @i32 {
+    // Compile time error
+    // References have to be initialized with data to reference
+    illegal_unassigned_ref : @i32;
+
+    // Can be assigned with the same => notation
+    reference :=> item;
+    
+    // @ goes on the right to dereference, and on the left to reference
+    referenced_value := @pointed_to;
+    dereferenced_value := item@;
+
+    // Reference arithmetic is illegal.
+    return referenced_value + 5; // Compile time error
+}
+</pre>
+        </p>
+    </div>
+</body>

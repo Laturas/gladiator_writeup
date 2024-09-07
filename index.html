@@ -105,7 +105,7 @@ main(param_1:i32):i32{local_var:i32=param_1+2;return(local_var);}</pre>
             Memory management - The thing you actually came for
         </h2>
         <p>
-            Gladiator's central design is oriented around the usage of arena based memory allocation. <br><br>
+            Gladiator's central design is oriented around the usage of arena based memory allocation. Hence the name!<br><br>
 
             Manual memory management offers power to programmers like few other features. Fine-grained control is necessary for many fields of software development. The catch is that it's hard, and brings with it numerous security bugs. But we don't believe it has to be that way!
             A significant reason manual memory management is difficult in a lot of lanugages is due to the need to keep track of many atomized lifetimes. 
@@ -393,6 +393,43 @@ pointer_example(item : i32, item_2 : i32, referenced : @i32) : @i32 {
     return referenced_value + 5; // Compile time error
 }
 </pre>
+        <h2>
+            Other QOL stuff
+        </h2>
+        <p>
+            Gladiator has a built in string type, static arrays, and dynamic arrays. All of which have a built in size property that can be accessed.
+            Strings are not null-terminated and are instead stored with a length like any other array. Strings are interpreted as utf-8.
+        </p>
+<pre class="code_block">
+cool_builtin_data_types() {
+    str_example : string = "Hello world!";
+    arr : int[5] = {1, 2, 3, 4, 5};
+    growable_array : int&lt;5&gt; = &lt;1, 2, 3, 4, 5&gt;
+    growable_array.append(5); // growable arrays can be extended with .append()
+
+    element := arr[2] + growable_array[6]; // Access works the same between them
+
+    // All of these types have built in length properties
+    total_size := str_example.length + arr.length + growable_array.length;
+}
+</pre>
+        <p>
+            Accessing items from a struct vs a struct pointer/reference is done with . in both cases.
+        </p>
+<pre class="code_block">
+ex_struct : struct {
+    element_1 : i32,
+}
+struct_access() {
+    example : ex_struct;
+    assert(example.element_1 == (->example).element_1); // true
+}
+</pre>
+        <p>
+            Everything is initialized to 0 by default (seeable in the above example. element_1 is 0)
+            <br><br>
+            NO HEADER FILES!!! <br>
+            Self explanatory, header files and their consequences have been a disaster.
         </p>
     </div>
 </body>
